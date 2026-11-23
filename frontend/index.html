@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Power Grid Simulator — Arctic Research Station</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Power Grid Simulator</h1>
+    <p class="subtitle">Single-bus station model &mdash; G101 &middot; CB101 &middot; L101 &middot; FS101</p>
+  </header>
+
+  <main class="app-main">
+    <section class="controls-panel" aria-label="Simulation controls">
+      <div class="control-group">
+        <label for="scenario">Scenario</label>
+        <select id="scenario">
+          <option value="normal">Normal operation</option>
+          <option value="generator_failure">Generator failure</option>
+          <option value="faulty_sensor">Faulty sensor (2am incident)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="duration">Duration (seconds)</label>
+        <input type="number" id="duration" value="300" min="10" max="3600" step="10" />
+      </div>
+
+      <div class="control-group">
+        <label for="initial-frequency">Initial frequency (Hz)</label>
+        <input type="number" id="initial-frequency" value="50.00" min="40" max="60" step="0.01" />
+      </div>
+
+      <div class="control-group event-time-group" id="fault-time-group" hidden>
+        <label for="fault-time">Fault time (s)</label>
+        <input type="number" id="fault-time" value="60" min="0" step="1" />
+      </div>
+
+      <div class="control-group event-time-group" id="failure-time-group" hidden>
+        <label for="generator-failure-time">Failure time (s)</label>
+        <input type="number" id="generator-failure-time" value="60" min="0" step="1" />
+      </div>
+
+      <div class="control-group checkbox-group" id="validation-toggle-group" hidden>
+        <label>
+          <input type="checkbox" id="disable-validation" />
+          Disable sensor validation (reproduce the naive 2am trip)
+        </label>
+      </div>
+
+      <div class="control-group">
+        <button id="run-btn" class="run-button">Run simulation</button>
+      </div>
+
+      <p class="scenario-description" id="scenario-description"></p>
+    </section>
+
+    <section class="kpi-panel" aria-label="Key metrics">
+      <div class="kpi-card">
+        <span class="kpi-label">Current frequency</span>
+        <span class="kpi-value" id="kpi-frequency">&ndash;</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">G101</span>
+        <span class="kpi-value" id="kpi-generator">&ndash;</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">CB101</span>
+        <span class="kpi-value" id="kpi-breaker">&ndash;</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Powered time</span>
+        <span class="kpi-value" id="kpi-powered">&ndash;</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Protective trips</span>
+        <span class="kpi-value" id="kpi-trips">&ndash;</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Limit violations</span>
+        <span class="kpi-value" id="kpi-violations">&ndash;</span>
+      </div>
+    </section>
+
+    <section class="playback-panel" aria-label="Playback controls">
+      <button id="play-btn" disabled>&#9654; Play</button>
+      <button id="step-btn" disabled>&#9197; Step</button>
+      <button id="reset-btn" disabled>&#8634; Reset</button>
+      <input type="range" id="timeline" min="0" max="0" value="0" disabled />
+      <span id="timeline-label">t = 0 s</span>
+    </section>
+
+    <section class="charts-panel" aria-label="Simulation charts">
+      <div class="chart-container">
+        <h2>Bus frequency (FS101)</h2>
+        <canvas id="frequency-chart" height="260"></canvas>
+      </div>
+      <div class="chart-container">
+        <h2>Generator G101</h2>
+        <canvas id="generator-chart" height="120"></canvas>
+      </div>
+      <div class="chart-container">
+        <h2>Circuit breaker CB101</h2>
+        <canvas id="breaker-chart" height="120"></canvas>
+      </div>
+    </section>
+
+    <section class="status-panel" aria-label="Status log">
+      <h2>Status</h2>
+      <p id="status-message">Configure a scenario and click "Run simulation".</p>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Arctic Research Station &mdash; single-generator, single-bus distribution model.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
