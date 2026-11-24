@@ -189,3 +189,111 @@ envelope (`{success, data, error}`) were accepted as proposed and matched
 the project's existing coding conventions (small cohesive files, immutable
 dataclasses, validate-at-the-boundary). No architectural rework was needed
 beyond the two fixes above.
+
+## 5. Follow-up session: circuit diagram, manual control mode, and docs
+
+A later session (same codebase, **Claude Sonnet 5**, same Claude Code
+environment) extended the simulator with three user-requested features,
+again starting from a plan the user had to approve before any code was
+touched.
+
+### Prompt 5 — feature request, plan-mode only
+> "1. The current model is perfect... but [it] does not have a visual
+> diagrammatic representation of all the circuit breakers... 2. ...explain
+> the presets in the README... 3. I just want something for when someone
+> wants to manually change things... Make this plan if these things exist.
+> Don't implement them, but be descriptive about why they're not doing it,
+> where and how they exist, and make a plan."
+
+**Response:** Claude Code's harness was in **plan mode** (edits/commands
+blocked except to the plan file itself), so the assistant could only read
+and explore — a useful constraint here, since it forced a full audit of
+the existing architecture (`backend/simulator/*.py`, `frontend/app.js`,
+`index.html`) *before* committing to any design. It traced exactly why
+each gap existed: the circuit diagram was never built (charts only); the
+README had a one-line scenario table but no control-by-control
+walkthrough; manual mode didn't exist because the engine was hard-wired
+to a fixed `scenario` literal consumed by one `run_simulation(config)`
+call. It then asked three structured clarifying questions rather than
+guessing: (a) live interactive stepping vs. a scripted-event list vs.
+both; (b) whether automatic protection should still be able to override a
+manual breaker choice; (c) an animated SVG schematic vs. simple colored
+state tiles for the diagram.
+
+**My input / modification:** Chose **both** manual approaches (live
+stepping *and* scripted events — broadest scope), a **toggleable**
+protection safety net (default on, can be switched off to deliberately
+demonstrate a limit violation), and the **animated SVG schematic** (richer
+than flat tiles). The assistant wrote the full plan to
+`pasted-content-id-5850-...md` reusing existing pure functions
+(`physics.next_frequency`, `control.decide_breaker`) rather than
+duplicating logic, then called `ExitPlanMode` for approval.
+
+**Correction:** the first `ExitPlanMode` call was rejected outright (no
+plan changes requested — the user simply wanted to review before
+approving in a later turn). The model was also switched mid-session
+(Opus → Sonnet 5.5 → back to `claude-sonnet-5`) between the plan being
+written and execution being approved; the plan content carried over
+unchanged across that switch.
+
+### Prompt 6 — execute
+> "execute the plan"
+
+**Response:** Claude Code (now running as Sonnet 5) re-read the approved
+plan file fresh, found an unrelated uncommitted change already sitting in
+the working tree (vendoring Chart.js locally instead of a CDN import —
+leftover from an earlier session), committed that separately first so it
+wouldn't get bundled into the new feature diff, created a dedicated
+feature branch, confirmed the baseline test suite was green (67 tests,
+99% coverage), and only then started implementing:
+
+- **Backend:** extracted `control.protection_would_open()` out of
+  `decide_breaker()` as a shared helper; added a frozen `ManualEvent`
+  dataclass and `events`/`protection_enabled` fields to `SimConfig`;
+  taught `engine.run_simulation()` to apply scripted manual events and to
+  let predictive protection override an unsafe operator-forced CLOSE; added
+  a new stateless `POST /api/step` endpoint (mirroring the project's
+  existing "recompute from scratch, no server-side memory" philosophy) for
+  live single-second stepping; added JSON-array validation for the new
+  `events` query parameter with the same fail-fast, boundary-validation
+  convention as the rest of `app.py`.
+- **Frontend:** added an inline SVG single-line schematic
+  (G101 → CB101 → bus → L101, FS101 tapped off the bus) driven by a new
+  `renderCircuit()` hooked into the existing `updateCursorDisplay()`, so it
+  stays in sync with playback/scrubbing for free; added a "Manual control"
+  scenario with live-stepping (toggle buttons + Step + Reset, calling
+  `/api/step`) and scripted-events (an add/remove event-list editor feeding
+  `/api/simulate`) sub-modes; added matching CSS including a
+  `prefers-reduced-motion` guard on the breaker animation.
+- **Docs:** rewrote the README's scenario table with what question each
+  preset answers and what to watch for, added a full new "Using the
+  dashboard" section explaining every control/KPI/chart/the new diagram,
+  and documented manual mode's two sub-modes.
+- **Tests:** added 28 new tests (67 → 95) — `protection_would_open`
+  unit tests, manual-scenario engine tests (event timing, protection
+  override on/off), and `/api/step`/`/api/simulate` validation tests for
+  the new parameters — keeping two pre-existing tests that hardcoded "all
+  three scenarios" updated to expect four, since that was an intentional
+  consequence of the new feature rather than a regression.
+
+**Verification performed before calling the work done:** ran the full
+pytest suite (95 passed, 98% backend coverage); started a *second* Flask
+process on port 5001 specifically because the dev server already running
+on port 5000 had the old code loaded in memory and the harness's auto-mode
+classifier declined a `taskkill` on the original process as a destructive
+action — rather than fight that, the assistant just verified against a
+fresh process on a different port instead of forcing the kill; used
+`curl` to exercise every new endpoint directly (scripted events firing at
+the correct second, `/api/step` honoring a safe close, overriding an
+unsafe close with protection on, honoring it with protection off, and
+rejecting malformed bodies with 400s); confirmed the live-served
+`index.html`/`app.js`/`style.css` actually contained the new markup/logic
+(not just the files on disk); ran `node --check` on `app.js` for syntax
+errors. Two commits were made on a dedicated feature branch
+(`feature/circuit-diagram-manual-mode`), split as one feature commit and
+one docs commit, each with a full rationale in the commit body — nothing
+was pushed or merged without being asked.
+
+**My input / modification:** none requested after execution — the
+reported summary (95/95 tests, 98% coverage, live-tested endpoints,
+clean working tree) was accepted as-is for this session.
