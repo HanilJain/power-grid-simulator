@@ -25,6 +25,30 @@ from backend.simulator import constants as c
 from backend.simulator.physics import next_frequency
 
 
+def protection_would_open(measured_frequency_hz: float, generator_on: bool) -> tuple[bool, str]:
+    """Layer-1 predictive protection check, extracted for reuse.
+
+    Always evaluates the CLOSED candidate one step ahead: if staying/going
+    CLOSED would breach the lower safety limit, protection must force OPEN
+    regardless of policy or operator intent. Returns (must_open, reason).
+    reason is "" when protection does not need to intervene.
+
+    Shared by `decide_breaker` (automatic hysteresis policy) and the manual
+    single-step API (operator-driven breaker choice) so both paths enforce
+    the exact same 49.50 Hz rule from a single source of truth. (The upper
+    limit needs no equivalent predictive check here: HYSTERESIS_MARGIN_HZ
+    safely exceeds MAX_PHYSICAL_RATE_HZ_PER_S, so a single step from
+    RECLOSE_HIGH_HZ can't overshoot UPPER_LIMIT_HZ.)
+    """
+    would_be_freq_if_closed = next_frequency(measured_frequency_hz, generator_on, True)
+    if would_be_freq_if_closed < c.LOWER_LIMIT_HZ:
+        return True, (
+            f"protection: closing/staying closed would drop frequency to "
+            f"{would_be_freq_if_closed:.3f} Hz, below the {c.LOWER_LIMIT_HZ} Hz limit"
+        )
+    return False, ""
+
+
 def decide_breaker(
     measured_frequency_hz: float,
     generator_on: bool,
@@ -39,17 +63,10 @@ def decide_breaker(
     # Always evaluate the CLOSED candidate one step ahead, unconditionally
     # (regardless of prev_breaker_closed): both "stay closed" and "newly
     # close" require the same one-step lookahead, since either results in
-    # CB101 being closed for the next step. If that would breach the lower
-    # limit, protection forces OPEN no matter what policy would otherwise
-    # choose. (The upper limit needs no equivalent predictive check here:
-    # HYSTERESIS_MARGIN_HZ safely exceeds MAX_PHYSICAL_RATE_HZ_PER_S, so a
-    # single step from RECLOSE_HIGH_HZ can't overshoot UPPER_LIMIT_HZ.)
-    would_be_freq_if_closed = next_frequency(measured_frequency_hz, generator_on, True)
-    if would_be_freq_if_closed < c.LOWER_LIMIT_HZ:
-        return False, (
-            f"protection: closing/staying closed would drop frequency to "
-            f"{would_be_freq_if_closed:.3f} Hz, below the {c.LOWER_LIMIT_HZ} Hz limit"
-        )
+    # CB101 being closed for the next step.
+    must_open, reason = protection_would_open(measured_frequency_hz, generator_on)
+    if must_open:
+        return False, reason
 
     # --- Layer 2: hysteresis policy, prefers CLOSED -----------------------
     if prev_breaker_closed:

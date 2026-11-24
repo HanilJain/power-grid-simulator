@@ -55,7 +55,9 @@ body {
 .kpi-panel,
 .playback-panel,
 .charts-panel,
-.status-panel {
+.status-panel,
+.manual-panel,
+.circuit-panel {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
@@ -240,6 +242,323 @@ body {
   font-size: 0.8rem;
 }
 
+/* --- Manual control panels --------------------------------------------- */
+
+.manual-panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.manual-hint {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.manual-live-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.manual-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manual-toggle-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.toggle-btn {
+  background: #0d1526;
+  color: var(--ok);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 90px;
+}
+
+.toggle-btn.state-off {
+  color: var(--text-muted);
+}
+
+#manual-live-reset-btn {
+  background: #0d1526;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+#manual-readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.manual-override-badge {
+  margin: 12px 0 0;
+  color: var(--warning);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.manual-event-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.manual-event-editor label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.manual-event-editor input,
+.manual-event-editor select {
+  background: #0d1526;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.manual-event-editor input[type="number"] {
+  width: 80px;
+}
+
+#manual-add-event-btn {
+  background: var(--accent-dim);
+  color: var(--text);
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.manual-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.manual-event-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0d1526;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.manual-event-list .remove-event-btn {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+}
+
+.manual-event-list-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* --- Circuit diagram ----------------------------------------------------- */
+
+.circuit-panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+#circuit-diagram {
+  width: 100%;
+  height: auto;
+  max-height: 260px;
+  display: block;
+}
+
+.circuit-wire {
+  stroke: var(--panel-border);
+  stroke-width: 3;
+  transition: stroke 0.2s ease;
+}
+
+.circuit-wire.wire-live {
+  stroke: var(--ok);
+}
+
+.circuit-wire.wire-trip {
+  stroke: var(--danger);
+}
+
+.circuit-generator-body {
+  fill: #0d1526;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.circuit-generator-body.gen-on {
+  fill: rgba(110, 231, 160, 0.18);
+  stroke: var(--ok);
+}
+
+.circuit-breaker-stub {
+  stroke: var(--text-muted);
+  stroke-width: 3;
+}
+
+.circuit-breaker-arm {
+  stroke: var(--text-muted);
+  stroke-width: 3;
+  transition: transform 0.3s ease, stroke 0.2s ease;
+  transform: rotate(0deg);
+}
+
+.circuit-breaker-arm.breaker-open {
+  stroke: var(--warning);
+  transform: rotate(-35deg);
+}
+
+.circuit-breaker-arm.breaker-trip {
+  stroke: var(--danger);
+}
+
+.circuit-breaker-pivot {
+  fill: var(--text-muted);
+}
+
+.circuit-bus-node {
+  fill: var(--text-muted);
+  transition: fill 0.2s ease;
+}
+
+.circuit-bus-node.bus-live {
+  fill: var(--ok);
+}
+
+.circuit-bus-node.bus-trip {
+  fill: var(--danger);
+}
+
+.circuit-load-body {
+  fill: #0d1526;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.circuit-load-body.load-powered {
+  fill: rgba(110, 231, 160, 0.18);
+  stroke: var(--ok);
+}
+
+.circuit-sensor-ring {
+  fill: #0d1526;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  transition: stroke 0.2s ease;
+}
+
+.circuit-sensor-ring.sensor-rejected {
+  stroke: var(--warning);
+}
+
+.circuit-sensor-ring.sensor-degraded {
+  stroke: var(--danger);
+}
+
+.circuit-symbol-label {
+  fill: var(--text);
+  font-size: 13px;
+  text-anchor: middle;
+  font-weight: 600;
+}
+
+.circuit-symbol-label-dark {
+  fill: var(--text);
+}
+
+.circuit-symbol-label-small {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.circuit-state-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.circuit-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-live {
+  background: var(--ok);
+}
+
+.legend-dead {
+  background: var(--panel-border);
+}
+
+.legend-trip {
+  background: var(--danger);
+}
+
+.legend-warn {
+  background: var(--warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit-breaker-arm,
+  .circuit-wire,
+  .circuit-generator-body,
+  .circuit-bus-node,
+  .circuit-load-body,
+  .circuit-sensor-ring {
+    transition: none;
+  }
+}
+
 @media (max-width: 600px) {
   .controls-panel {
     flex-direction: column;
@@ -248,5 +567,10 @@ body {
 
   .control-group {
     min-width: unset;
+  }
+
+  .manual-live-controls {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

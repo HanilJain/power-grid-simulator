@@ -13,7 +13,7 @@ import pytest
 
 from backend.simulator import constants as c
 from backend.simulator.engine import run_simulation
-from backend.simulator.models import SimConfig
+from backend.simulator.models import ManualEvent, SimConfig
 
 
 class TestNormalScenarioInvariants:
@@ -121,3 +121,88 @@ class TestFaultySensorScenario:
         )
         fault_step = result.steps[60]
         assert fault_step.true_frequency_hz >= c.LOWER_LIMIT_HZ
+
+
+class TestManualScenario:
+    """The "manual" scenario lets an operator script G101/CB101 actions
+    directly (via SimConfig.events) instead of picking an automatic
+    scenario. Predictive protection (control.protection_would_open) can
+    optionally override an unsafe forced CLOSE via protection_enabled.
+    """
+
+    def test_events_apply_at_the_scripted_second(self) -> None:
+        result = run_simulation(
+            SimConfig(
+                duration_s=10,
+                scenario="manual",
+                events=(ManualEvent(t=5, action="breaker_open"),),
+            )
+        )
+        assert result.steps[4].breaker_closed is True
+        assert result.steps[5].breaker_closed is False
+        assert result.steps[9].breaker_closed is False
+
+    def test_generator_off_event_applies_at_the_scripted_second(self) -> None:
+        result = run_simulation(
+            SimConfig(
+                duration_s=10,
+                scenario="manual",
+                events=(ManualEvent(t=3, action="generator_off"),),
+            )
+        )
+        assert result.steps[2].generator_on is True
+        assert result.steps[3].generator_on is False
+
+    def test_reclose_event_restores_closed_state(self) -> None:
+        result = run_simulation(
+            SimConfig(
+                duration_s=10,
+                scenario="manual",
+                events=(
+                    ManualEvent(t=2, action="breaker_open"),
+                    ManualEvent(t=4, action="breaker_close"),
+                ),
+            )
+        )
+        assert result.steps[2].breaker_closed is False
+        assert result.steps[4].breaker_closed is True
+
+    def test_protection_enabled_overrides_unsafe_forced_close(self) -> None:
+        # Start just above the lower limit so closing (gen ON -> -0.05 Hz/s)
+        # would breach it; protection must force OPEN instead.
+        result = run_simulation(
+            SimConfig(
+                duration_s=5,
+                scenario="manual",
+                initial_frequency_hz=49.54,
+                protection_enabled=True,
+                events=(ManualEvent(t=0, action="breaker_close"),),
+            )
+        )
+        assert result.steps[0].breaker_closed is False
+        assert result.steps[0].protection_overridden is True
+        assert result.limit_violations == 0
+
+    def test_protection_disabled_allows_limit_violation(self) -> None:
+        # Same unsafe close, but with the safety net off: the operator's
+        # choice stands and the band CAN be breached (demonstrating what
+        # protection normally prevents).
+        result = run_simulation(
+            SimConfig(
+                duration_s=5,
+                scenario="manual",
+                initial_frequency_hz=49.54,
+                protection_enabled=False,
+                breaker_initially_closed=True,
+                generator_initially_on=True,
+            )
+        )
+        assert result.steps[0].breaker_closed is True
+        assert result.steps[0].protection_overridden is False
+        assert result.limit_violations > 0
+
+    def test_no_events_behaves_like_a_static_initial_state(self) -> None:
+        result = run_simulation(
+            SimConfig(duration_s=5, scenario="manual", events=())
+        )
+        assert all(s.generator_on for s in result.steps)

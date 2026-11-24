@@ -12,7 +12,21 @@ from typing import Literal
 
 from backend.simulator import constants as c
 
-Scenario = Literal["normal", "generator_failure", "faulty_sensor"]
+Scenario = Literal["normal", "generator_failure", "faulty_sensor", "manual"]
+ManualAction = Literal["generator_on", "generator_off", "breaker_open", "breaker_close"]
+
+
+@dataclass(frozen=True)
+class ManualEvent:
+    """One scripted operator action fired at a specific second.
+
+    Used only by the "manual" scenario (see scenarios.py/engine.py): a
+    sequence of these lets a user script a custom run (e.g. "open CB101 at
+    t=30") instead of picking one of the fixed preset scenarios.
+    """
+
+    t: int
+    action: ManualAction
 
 
 @dataclass(frozen=True)
@@ -31,6 +45,16 @@ class SimConfig:
     # faulty_sensor scenario only: run with validation disabled (reproduces
     # the "unnecessary breaker trip" incident) rather than the protected path
     disable_sensor_validation: bool = False
+    # manual scenario only: scripted operator actions, applied in engine.py
+    # at the step where event.t matches the current second
+    events: tuple[ManualEvent, ...] = field(default_factory=tuple)
+    # manual scenario only: whether predictive protection (control.py's
+    # protection_would_open) may override an operator's forced CLOSE that
+    # would breach the lower frequency limit. True (default) mirrors the
+    # automatic scenarios' always-on protection; False lets an operator
+    # intentionally drive the system into a limit violation, e.g. to see
+    # what happens without the safety net.
+    protection_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -47,6 +71,11 @@ class StepResult:
     sensor_degraded: bool = False
     tripped: bool = False
     note: str = ""
+    # manual scenario / /api/step only: True when protection overrode an
+    # operator-requested CLOSE (forced OPEN instead). Always False for the
+    # automatic scenarios, where there is no separate "operator intent" to
+    # override -- decide_breaker's own choice already reflects protection.
+    protection_overridden: bool = False
 
 
 @dataclass(frozen=True)

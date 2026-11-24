@@ -21,6 +21,7 @@
           <option value="normal">Normal operation</option>
           <option value="generator_failure">Generator failure</option>
           <option value="faulty_sensor">Faulty sensor (2am incident)</option>
+          <option value="manual">Manual control</option>
         </select>
       </div>
 
@@ -51,11 +52,137 @@
         </label>
       </div>
 
+      <div class="control-group manual-mode-group" id="manual-mode-group" hidden>
+        <label for="manual-mode">Manual mode</label>
+        <select id="manual-mode">
+          <option value="live">Live stepping (drive it yourself)</option>
+          <option value="scripted">Scripted events (plan a run)</option>
+        </select>
+      </div>
+
+      <div class="control-group checkbox-group" id="manual-protection-group" hidden>
+        <label>
+          <input type="checkbox" id="manual-protection" checked />
+          Protection safety net (auto-open if a close would breach 49.50 Hz)
+        </label>
+      </div>
+
       <div class="control-group">
         <button id="run-btn" class="run-button">Run simulation</button>
       </div>
 
       <p class="scenario-description" id="scenario-description"></p>
+    </section>
+
+    <section class="manual-panel" aria-label="Manual control" id="manual-live-panel" hidden>
+      <h2>Live stepping</h2>
+      <p class="manual-hint">
+        You are the operator. Set G101/CB101, then advance one second at a
+        time and watch true frequency respond. With the protection safety
+        net ON, an unsafe CLOSE is forced OPEN automatically (badge shown
+        below); turn it OFF to see what happens without that guard.
+      </p>
+      <div class="manual-live-controls">
+        <div class="manual-toggle">
+          <span class="manual-toggle-label">G101</span>
+          <button id="manual-generator-toggle" class="toggle-btn" type="button">ON</button>
+        </div>
+        <div class="manual-toggle">
+          <span class="manual-toggle-label">CB101</span>
+          <button id="manual-breaker-toggle" class="toggle-btn" type="button">CLOSED</button>
+        </div>
+        <button id="manual-step-btn" class="run-button" type="button">Step +1s</button>
+        <button id="manual-live-reset-btn" type="button">&#8634; Reset live run</button>
+        <span id="manual-readout">t = 0 s &middot; 50.000 Hz</span>
+      </div>
+      <p id="manual-override-badge" class="manual-override-badge" hidden>
+        &#9888; Protection just overrode your CLOSE request and forced CB101 OPEN.
+      </p>
+    </section>
+
+    <section class="manual-panel" aria-label="Scripted events" id="manual-scripted-panel" hidden>
+      <h2>Scripted events</h2>
+      <p class="manual-hint">
+        Add actions at specific seconds, then click "Run simulation" to
+        execute the whole script at once and review it like any preset.
+      </p>
+      <div class="manual-event-editor">
+        <label for="manual-event-time">At t =</label>
+        <input type="number" id="manual-event-time" value="0" min="0" step="1" />
+        <label for="manual-event-action">do</label>
+        <select id="manual-event-action">
+          <option value="generator_on">G101 ON</option>
+          <option value="generator_off">G101 OFF</option>
+          <option value="breaker_close">CB101 CLOSE</option>
+          <option value="breaker_open">CB101 OPEN</option>
+        </select>
+        <button id="manual-add-event-btn" type="button">Add event</button>
+      </div>
+      <ul id="manual-event-list" class="manual-event-list"></ul>
+    </section>
+
+    <section class="circuit-panel" aria-label="Circuit diagram">
+      <h2>Circuit diagram</h2>
+      <svg id="circuit-diagram" viewBox="0 0 640 220" role="img" aria-labelledby="circuit-diagram-title">
+        <title id="circuit-diagram-title">Single-line diagram: G101, CB101, bus, L101, FS101</title>
+
+        <!-- Wire: G101 -> CB101 -->
+        <line id="wire-gen-cb" class="circuit-wire" x1="95" y1="90" x2="230" y2="90" />
+        <!-- Wire: CB101 -> bus node -->
+        <line id="wire-cb-bus" class="circuit-wire" x1="290" y1="90" x2="400" y2="90" />
+        <!-- Wire: bus node -> L101 -->
+        <line id="wire-bus-load" class="circuit-wire" x1="400" y1="90" x2="520" y2="90" />
+        <!-- Wire: bus node -> FS101 (drops down) -->
+        <line id="wire-bus-sensor" class="circuit-wire" x1="400" y1="90" x2="400" y2="165" />
+
+        <!-- G101 generator symbol -->
+        <g id="symbol-generator">
+          <circle cx="60" cy="90" r="34" class="circuit-generator-body" />
+          <text x="60" y="85" class="circuit-symbol-label">G101</text>
+          <text x="60" y="103" class="circuit-state-label" id="circuit-generator-state">ON</text>
+        </g>
+
+        <!-- CB101 breaker symbol: two fixed contact stubs + a pivoting arm -->
+        <g id="symbol-breaker">
+          <line x1="230" y1="90" x2="245" y2="90" class="circuit-breaker-stub" />
+          <line x1="275" y1="90" x2="290" y2="90" class="circuit-breaker-stub" />
+          <line
+            id="breaker-arm"
+            x1="245"
+            y1="90"
+            x2="275"
+            y2="90"
+            class="circuit-breaker-arm"
+            transform-origin="245 90"
+          />
+          <circle cx="245" cy="90" r="3" class="circuit-breaker-pivot" />
+          <text x="260" y="60" class="circuit-symbol-label">CB101</text>
+          <text x="260" y="130" class="circuit-state-label" id="circuit-breaker-state">CLOSED</text>
+        </g>
+
+        <!-- Bus node -->
+        <circle cx="400" cy="90" r="5" id="bus-node" class="circuit-bus-node" />
+        <text x="400" y="55" class="circuit-symbol-label">BUS</text>
+
+        <!-- L101 load symbol -->
+        <g id="symbol-load">
+          <rect x="520" y="70" width="60" height="40" rx="4" class="circuit-load-body" />
+          <text x="550" y="95" class="circuit-symbol-label circuit-symbol-label-dark">L101</text>
+          <text x="550" y="130" class="circuit-state-label" id="circuit-load-state">POWERED</text>
+        </g>
+
+        <!-- FS101 sensor symbol -->
+        <g id="symbol-sensor">
+          <circle cx="400" cy="190" r="22" id="sensor-ring" class="circuit-sensor-ring" />
+          <text x="400" y="194" class="circuit-symbol-label circuit-symbol-label-small">FS101</text>
+        </g>
+      </svg>
+      <p class="circuit-legend">
+        <span class="legend-item"><span class="legend-swatch legend-live"></span>Energized</span>
+        <span class="legend-item"><span class="legend-swatch legend-dead"></span>De-energized</span>
+        <span class="legend-item"><span class="legend-swatch legend-trip"></span>Trip / violation</span>
+        <span class="legend-item"><span class="legend-swatch legend-warn"></span>Sensor reading rejected</span>
+      </p>
     </section>
 
     <section class="kpi-panel" aria-label="Key metrics">

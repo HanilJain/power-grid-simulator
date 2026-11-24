@@ -11,8 +11,8 @@ from backend.simulator.scenarios import SCENARIOS, describe_scenario
 
 
 class TestScenarioRegistry:
-    def test_all_three_required_scenarios_are_registered(self) -> None:
-        assert set(SCENARIOS) == {"normal", "generator_failure", "faulty_sensor"}
+    def test_all_required_scenarios_are_registered(self) -> None:
+        assert set(SCENARIOS) == {"normal", "generator_failure", "faulty_sensor", "manual"}
 
     def test_describe_scenario_returns_nonempty_text_for_each(self) -> None:
         for name in SCENARIOS:
@@ -39,3 +39,9 @@ class TestDefaultConfigsAreValid:
     def test_faulty_sensor_default_config_constructs(self) -> None:
         cfg = SimConfig(scenario="faulty_sensor")
         assert cfg.scenario == "faulty_sensor"
+
+    def test_manual_default_config_constructs(self) -> None:
+        cfg = SimConfig(scenario="manual")
+        assert cfg.scenario == "manual"
+        assert cfg.events == ()
+        assert cfg.protection_enabled is True

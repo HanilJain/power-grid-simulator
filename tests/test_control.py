@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from backend.simulator import constants as c
-from backend.simulator.control import decide_breaker
+from backend.simulator.control import decide_breaker, protection_would_open
 
 
 class TestProtectionNeverViolatesLowerLimit:
@@ -106,3 +106,37 @@ class TestGeneratorOffScenario:
         closed_near, _ = decide_breaker(49.63, generator_on=False, prev_breaker_closed=True)
         assert closed_far is True
         assert closed_near is False
+
+
+class TestProtectionWouldOpenHelper:
+    """protection_would_open is the extracted Layer-1 predictive check,
+    reused by both decide_breaker (automatic scenarios) and the manual
+    single-step API/engine path (backend/app.py's /api/step,
+    engine.py's "manual" scenario) -- one source of truth for the 49.50 Hz
+    rule regardless of who is choosing the breaker state.
+    """
+
+    def test_flags_open_when_closing_would_cross_lower_limit(self) -> None:
+        must_open, reason = protection_would_open(49.54, generator_on=True)
+        assert must_open is True
+        assert "protection" in reason.lower()
+
+    def test_does_not_flag_when_staying_closed_is_safe(self) -> None:
+        must_open, reason = protection_would_open(50.00, generator_on=True)
+        assert must_open is False
+        assert reason == ""
+
+    def test_flags_open_for_generator_off_near_lower_limit(self) -> None:
+        must_open, _reason = protection_would_open(49.60, generator_on=False)
+        assert must_open is True
+
+    def test_matches_decide_breaker_for_the_same_inputs(self) -> None:
+        # Regression guard: extracting the helper must not change
+        # decide_breaker's own behavior at the boundary.
+        for freq in (49.80, 49.70, 49.54, 49.50, 49.00):
+            for generator_on in (True, False):
+                must_open, _ = protection_would_open(freq, generator_on)
+                closed, reason = decide_breaker(freq, generator_on, prev_breaker_closed=True)
+                if must_open:
+                    assert closed is False
+                    assert "protection" in reason.lower()

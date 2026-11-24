@@ -4,13 +4,16 @@ Runs the station model in 1-second steps for a configurable duration
 (Functional Requirement 1). At every step:
 
   1. Apply any scenario-scripted event for this instant (generator trip,
-     sensor fault injection).
+     sensor fault injection, or -- for "manual" -- the operator's own
+     scripted G101/CB101 actions).
   2. FS101 produces a reading of the current true frequency (`sensor.measure`).
   3. Optionally validate that reading against physics before trusting it
      (`sensor.validate`) -- this is what prevents a faulty reading alone
      from causing an unnecessary trip.
-  4. The controller decides CB101's next state from the (validated) reading
-     (`control.decide_breaker`).
+  4. The breaker's next state is decided: for the automatic scenarios, by
+     the hysteresis controller (`control.decide_breaker`); for "manual", by
+     the operator's own choice (step 1), optionally overridden by predictive
+     protection (`control.protection_would_open`) if `protection_enabled`.
   5. True frequency is advanced one step under the *actual* generator/breaker
      state (`physics.next_frequency`) -- never under the possibly-wrong
      measured state, since the bus doesn't care what the sensor reported.
@@ -22,10 +25,36 @@ place.
 from __future__ import annotations
 
 from backend.simulator import constants as c
-from backend.simulator.control import decide_breaker
-from backend.simulator.models import SimConfig, SimulationResult, StepResult
+from backend.simulator.control import decide_breaker, protection_would_open
+from backend.simulator.models import ManualEvent, SimConfig, SimulationResult, StepResult
 from backend.simulator.physics import next_frequency
 from backend.simulator.sensor import SensorState, is_sensor_degraded, measure, validate
+
+
+def _apply_manual_event(
+    t: int,
+    generator_on: bool,
+    breaker_closed: bool,
+    events: tuple[ManualEvent, ...],
+) -> tuple[bool, bool]:
+    """Apply any scripted manual events scheduled for second `t`.
+
+    Multiple events at the same `t` are applied in list order. Returns the
+    (possibly updated) (generator_on, breaker_closed) -- never mutates
+    anything, just folds over the immutable event tuple.
+    """
+    for event in events:
+        if event.t != t:
+            continue
+        if event.action == "generator_on":
+            generator_on = True
+        elif event.action == "generator_off":
+            generator_on = False
+        elif event.action == "breaker_open":
+            breaker_closed = False
+        elif event.action == "breaker_close":
+            breaker_closed = True
+    return generator_on, breaker_closed
 
 
 def run_simulation(config: SimConfig) -> SimulationResult:
@@ -41,6 +70,11 @@ def run_simulation(config: SimConfig) -> SimulationResult:
         # 1. Scenario-scripted events for this instant.
         if config.scenario == "generator_failure" and t == config.generator_failure_time_s:
             generator_on = False
+        operator_breaker_closed = breaker_closed
+        if config.scenario == "manual":
+            generator_on, operator_breaker_closed = _apply_manual_event(
+                t, generator_on, breaker_closed, config.events
+            )
 
         # 2. Sensor reading (possibly faulted).
         raw_reading, fault_injected = measure(
@@ -61,18 +95,33 @@ def run_simulation(config: SimConfig) -> SimulationResult:
             sensor_degraded = is_sensor_degraded(sensor_state)
             effective_reading = sensor_state.last_valid_hz
 
-        # 4. Controller decision from the (validated) reading.
+        # 4. Decide CB101's next state.
         prev_closed = breaker_closed
-        new_breaker_closed, reason = decide_breaker(
-            measured_frequency_hz=effective_reading,
-            generator_on=generator_on,
-            prev_breaker_closed=breaker_closed,
-        )
+        protection_overridden = False
+        if config.scenario == "manual":
+            # Operator's own choice stands unless protection is enabled and
+            # that choice (CLOSED) would breach the lower limit.
+            new_breaker_closed = operator_breaker_closed
+            reason = "manual: operator-selected breaker state"
+            if config.protection_enabled and new_breaker_closed:
+                must_open, protection_reason = protection_would_open(effective_reading, generator_on)
+                if must_open:
+                    new_breaker_closed = False
+                    reason = protection_reason
+                    protection_overridden = True
+        else:
+            new_breaker_closed, reason = decide_breaker(
+                measured_frequency_hz=effective_reading,
+                generator_on=generator_on,
+                prev_breaker_closed=breaker_closed,
+            )
         # A "trip" is a protection-driven opening (abnormal: the limit was
         # genuinely at risk) -- not routine hysteresis reopening, which is
         # expected duty-cycling behaviour under Assumption 4/5 and happens
         # continuously even in the normal scenario.
-        tripped = prev_closed and not new_breaker_closed and reason.startswith("protection")
+        tripped = (prev_closed and not new_breaker_closed and reason.startswith("protection")) or (
+            protection_overridden
+        )
         breaker_closed = new_breaker_closed
 
         steps.append(
@@ -87,6 +136,7 @@ def run_simulation(config: SimConfig) -> SimulationResult:
                 sensor_degraded=sensor_degraded,
                 tripped=tripped,
                 note=reason,
+                protection_overridden=protection_overridden,
             )
         )
 

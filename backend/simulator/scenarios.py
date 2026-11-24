@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from backend.simulator.models import Scenario
 
-SCENARIOS: tuple[Scenario, ...] = ("normal", "generator_failure", "faulty_sensor")
+SCENARIOS: tuple[Scenario, ...] = ("normal", "generator_failure", "faulty_sensor", "manual")
 
 _DESCRIPTIONS: dict[str, str] = {
     "normal": (
@@ -28,6 +28,13 @@ _DESCRIPTIONS: dict[str, str] = {
         "reproducing last winter's 2am incident. With sensor validation "
         "enabled the bad reading is rejected and nothing trips; with it "
         "disabled the controller is fooled into an unnecessary trip."
+    ),
+    "manual": (
+        "You script a sequence of G101/CB101 actions at chosen times "
+        "instead of picking a fixed scenario. Predictive protection can "
+        "optionally override an unsafe forced CLOSE (toggle "
+        "'protection_enabled') so you can compare a guarded run against "
+        "one where you are given full, unguarded control."
     ),
 }
 
